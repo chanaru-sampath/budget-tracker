@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useSuspenseQuery } from '@tanstack/react-query'
@@ -40,9 +40,9 @@ const installmentSchema = z.object({
   label: z.string().min(2, 'Label must be at least 2 characters'),
   categoryId: z.string().min(1, 'Category is required'),
   cardId: z.string().min(1, 'Credit card is required'),
-  totalAmount: z.number().positive('Total amount must be greater than 0'),
-  monthlyAmount: z.number().positive('Monthly amount must be greater than 0'),
-  totalInstallments: z.number().int().min(1, 'Must have at least 1 installment'),
+  totalAmount: z.coerce.number<number>().positive('Total amount must be greater than 0'),
+  monthlyAmount: z.coerce.number<number>().positive('Monthly amount must be greater than 0'),
+  totalInstallments: z.coerce.number<number>().int().min(1, 'Must have at least 1 installment'),
   startDate: z.string().min(1, 'Start date is required'),
   notes: z.string(),
 })
@@ -75,6 +75,16 @@ function InstallmentsPage() {
     },
   })
 
+  const monthlyAmount = form.watch('monthlyAmount')
+  const totalInstallments = form.watch('totalInstallments')
+
+  useEffect(() => {
+    form.setValue('totalAmount', (monthlyAmount || 0) * (totalInstallments || 0), {
+      shouldValidate: true,
+      shouldDirty: true,
+    })
+  }, [monthlyAmount, totalInstallments, form])
+
   const openDialog = (plan?: InstallmentPlan) => {
     if (plan) {
       setEditingId(plan.id)
@@ -82,9 +92,9 @@ function InstallmentsPage() {
         label: plan.label,
         categoryId: plan.categoryId ?? '',
         cardId: plan.cardId ?? '',
-        totalAmount: Number(plan.totalAmount),
-        monthlyAmount: Number(plan.monthlyAmount),
-        totalInstallments: Number(plan.totalInstallments),
+        totalAmount: plan.totalAmount,
+        monthlyAmount: plan.monthlyAmount,
+        totalInstallments: plan.totalInstallments,
         startDate: plan.startDate,
         notes: plan.notes ?? '',
       })
@@ -109,9 +119,9 @@ function InstallmentsPage() {
       label: data.label,
       categoryId: data.categoryId || null,
       cardId: data.cardId || null,
-      totalAmount: Number(data.totalAmount),
-      monthlyAmount: Number(data.monthlyAmount),
-      totalInstallments: Number(data.totalInstallments),
+      totalAmount: data.totalAmount,
+      monthlyAmount: data.monthlyAmount,
+      totalInstallments: data.totalInstallments,
       startDate: data.startDate,
       notes: data.notes || null,
     }
@@ -207,7 +217,7 @@ function InstallmentsPage() {
                       <FormItem>
                         <FormLabel>Total Amount (LKR)</FormLabel>
                         <FormControl>
-                          <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                          <Input type="number" step="0.01" placeholder="0.00" disabled {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

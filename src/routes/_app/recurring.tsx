@@ -41,7 +41,7 @@ const recurringSchema = z.object({
   label: z.string().min(2, 'Label must be at least 2 characters'),
   categoryId: z.string().min(1, 'Category is required'),
   paymentSource: z.string().min(1, 'Payment source is required'), // Format: 'bank:ID' or 'card:ID'
-  amount: z.number().positive('Amount must be greater than 0'),
+  amount: z.coerce.number<number>().positive('Amount must be greater than 0'),
   startDate: z.string().min(1, 'Start date is required'),
   endDate: z.string().optional(),
 })
@@ -85,7 +85,7 @@ function RecurringPage() {
         label: template.label,
         categoryId: template.categoryId ?? '',
         paymentSource,
-        amount: Number(template.amount),
+        amount: template.amount,
         startDate: template.startDate,
         endDate: template.endDate ?? '',
       })
@@ -112,7 +112,7 @@ function RecurringPage() {
       categoryId: data.categoryId || null,
       bankId: isBank ? sourceId : null,
       cardId: !isBank ? sourceId : null,
-      amount: Number(data.amount),
+      amount: data.amount,
       startDate: data.startDate,
       endDate: data.endDate || null,
     }
