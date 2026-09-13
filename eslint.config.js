@@ -1,4 +1,5 @@
 import js from '@eslint/js'
+import checkFile from 'eslint-plugin-check-file'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
@@ -18,7 +19,25 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    plugins: {
+      'check-file': checkFile,
+    },
     rules: {
+      'check-file/filename-naming-convention': [
+        'error',
+        {
+          '**/*.{ts,tsx}': 'KEBAB_CASE',
+        },
+        {
+          ignoreMiddleExtensions: true,
+        },
+      ],
+      'check-file/folder-naming-convention': [
+        'error',
+        {
+          'src/**/': 'KEBAB_CASE',
+        },
+      ],
       'no-restricted-syntax': [
         'error',
         {
@@ -40,6 +59,14 @@ export default defineConfig([
     files: ['src/lib/env.ts'],
     rules: {
       'no-restricted-syntax': 'off',
+    },
+  },
+  {
+    // Ignore TanStack Router special files and folders (e.g., __root.tsx, _app.tsx, _auth/)
+    files: ['src/routes/**/__*.{ts,tsx}', 'src/routes/**/_*.{ts,tsx}', 'src/routes/**/_*/**/*.{ts,tsx}'],
+    rules: {
+      'check-file/filename-naming-convention': 'off',
+      'check-file/folder-naming-convention': 'off',
     },
   },
 ])
