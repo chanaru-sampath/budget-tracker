@@ -1,13 +1,13 @@
 # Budget Tracker — System Design Document
 
-_v3.0 — Synced with implemented schema_
+_v4.0 — Added bank accounts, salary allocations, forward-only amount change history, CC carry-forward_
 
 ## 1. Overview
 
 A personal household budget tracker web app to replace manual Excel tracking.
 Each family member logs in independently, manages their own monthly income and
-expenses, tracks recurring payments, and views a summary of income vs. expenses
-with category breakdowns.
+expenses, tracks recurring payments and credit card installments, and views a
+summary of income vs. expenses with category breakdowns — all scoped per bank account.
 
 ---
 
@@ -39,52 +39,40 @@ with category breakdowns.
 
 ## 4. Package Installation Reference
 
-\`\`\`bash
-
+```bash
 # 1. Scaffold project
-
 pnpm create vite@latest budget-tracker -- --template react-ts
 cd budget-tracker
 
 # 2. Tailwind v4 (Vite plugin — no tailwind.config.js needed)
-
 pnpm add tailwindcss @tailwindcss/vite
 
-# 3. shadcn/ui (handles Radix, clsx, tailwind-merge internally)
-
+# 3. shadcn/ui
 pnpm dlx shadcn@latest init
-
 # -> style: new-york | base color: Slate | CSS variables: yes
 
 # 4. TanStack Router
-
 pnpm add @tanstack/react-router @tanstack/react-router-devtools
 pnpm add -D @tanstack/router-plugin
 
 # 5. TanStack Query
-
 pnpm add @tanstack/react-query @tanstack/react-query-devtools
 
 # 6. Zustand v5
-
 pnpm add zustand
 
 # 7. Supabase
-
 pnpm add @supabase/supabase-js @supabase/ssr
 
 # 8. Charts + Notifications
-
 pnpm add recharts sonner
 
-# 9. React Hook Form + Zod (for forms)
-
+# 9. React Hook Form + Zod
 pnpm add react-hook-form @hookform/resolvers zod
 
 # 10. Dev tools
-
 pnpm add -D @types/node prettier prettier-plugin-tailwindcss
-\`\`\`
+```
 
 ---
 
@@ -100,86 +88,83 @@ pnpm add -D @types/node prettier prettier-plugin-tailwindcss
 | TanStack Query hooks (file) | kebab-case                 | `use-expenses.ts`                       |
 | Route files                 | TanStack Router convention | `dashboard.tsx`, `_app/route.tsx`       |
 | Auto-generated files        | Lib convention (untouched) | `routeTree.gen.ts`, `database.types.ts` |
-| Supabase types file         | Lib convention             | `database.types.ts`                     |
 | CSS / config files          | As required by tool        | `vite.config.ts`, `.prettierrc`         |
 
-**Rule of thumb**: if _you_ create it -> kebab-case. If a _library generates it_ -> leave it as-is.
+**Rule of thumb**: if _you_ create it → kebab-case. If a _library generates it_ → leave it as-is.
 
 ## 6. Prettier Config (`.prettierrc`)
 
-\`\`\`json
+```json
 {
-"semi": false,
-"singleQuote": true,
-"tabWidth": 2,
-"trailingComma": "all",
-"printWidth": 100,
-"plugins": ["prettier-plugin-tailwindcss"]
+  "semi": false,
+  "singleQuote": true,
+  "tabWidth": 2,
+  "trailingComma": "all",
+  "printWidth": 100,
+  "plugins": ["prettier-plugin-tailwindcss"]
 }
-\`\`\`
+```
 
-Add to `.prettierignore`:
-\`\`\`
+`.prettierignore`:
+
+```
 routeTree.gen.ts
 dist/
 node_modules/
-\`\`\`
+```
 
 ## 7. vite.config.ts
 
-\`\`\`ts
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+```ts
 import tailwindcss from '@tailwindcss/vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
+import react from '@vitejs/plugin-react'
 import path from 'path'
+import { defineConfig } from 'vite'
 
 export default defineConfig({
-plugins: [
-// tanstackRouter MUST come before react plugin
-tanstackRouter({ target: 'react', autoCodeSplitting: true }),
-react(),
-tailwindcss(),
-],
-resolve: {
-alias: { '@': path.resolve(__dirname, './src') },
-},
+  plugins: [
+    // tanstackRouter MUST come before react plugin
+    tanstackRouter({ target: 'react', autoCodeSplitting: true }),
+    react(),
+    tailwindcss(),
+  ],
+  resolve: {
+    alias: { '@': path.resolve(__dirname, './src') },
+  },
 })
-\`\`\`
+```
 
 ---
 
 ## 8. Users & Auth
 
-- Each person (e.g. Isuru, Sudu, Amma) has their own account via email + password.
+- Each person has their own account via email + password.
 - Supabase Auth handles login/logout/session via `@supabase/ssr`.
-- Auth session is stored in a **Zustand store** (`useAuthStore`) — no React Context needed.
-- Row Level Security (RLS) on all tables ensures each user only ever reads/writes their own rows.
+- Auth session stored in Zustand (`use-auth-store.ts`) — no React Context needed.
+- Row Level Security (RLS) on ALL tables — users can never touch another user's rows.
 - Password reset via Supabase built-in email flow.
 
 ---
 
 ## 9. State Management Strategy
 
-| State type                                            | Tool                     | Reason                                                 |
-| ----------------------------------------------------- | ------------------------ | ------------------------------------------------------ |
-| Auth session / current user                           | Zustand (`useAuthStore`) | Global, persistent, no re-renders on unrelated changes |
-| Selected month                                        | Zustand (`useUIStore`)   | Global UI state shared across pages                    |
-| Server data (transactions, categories, budgets, etc.) | TanStack Query           | Caching, deduplication, background refetch             |
-| Form state                                            | React Hook Form          | Contained within forms, validated via Zod              |
-
-Zustand stores are kept **slim** — only truly global UI/auth state. All server
-data goes through TanStack Query with Supabase query functions as fetchers.
+| State type                                   | Tool                       | Reason                                     |
+| -------------------------------------------- | -------------------------- | ------------------------------------------ |
+| Auth session / current user                  | Zustand (`use-auth-store`) | Global, persistent                         |
+| Selected month                               | Zustand (`use-ui-store`)   | Shared across all pages                    |
+| Server data (transactions, categories, etc.) | TanStack Query             | Caching, deduplication, background refetch |
+| Form state                                   | React Hook Form + Zod      | Contained within forms                     |
 
 ---
 
-## 10. Database Schema (PostgreSQL / Supabase)
+## 10. Database Schema
 
-> Full SQL source: [`docs/supabase-schema.sql`](./supabase-schema.sql)
+> Full SQL: [`docs/supabase-schema.sql`](./supabase-schema.sql)
 
 ### 10.1 `profiles`
 
-Extends Supabase's built-in `auth.users`. Auto-created on signup via DB trigger.
+Auto-created on signup via DB trigger.
 
 | Column       | Type          | Notes                       |
 | ------------ | ------------- | --------------------------- |
@@ -192,17 +177,17 @@ Extends Supabase's built-in `auth.users`. Auto-created on signup via DB trigger.
 
 ### 10.2 `categories`
 
-Expense/income categories per user. Seeded with defaults on signup.
+Seeded with defaults on signup. User can add/edit freely.
 
-| Column       | Type          | Notes                                   |
-| ------------ | ------------- | --------------------------------------- |
-| `id`         | `uuid` PK     |                                         |
-| `user_id`    | `uuid` FK     | -> `auth.users`                         |
-| `name`       | `text`        |                                         |
-| `type`       | `text`        | `CHECK (type IN ('income', 'expense'))` |
-| `color`      | `text`        | Hex color for UI display                |
-| `is_default` | `boolean`     | `DEFAULT false`                         |
-| `created_at` | `timestamptz` |                                         |
+| Column       | Type          | Notes                            |
+| ------------ | ------------- | -------------------------------- |
+| `id`         | `uuid` PK     |                                  |
+| `user_id`    | `uuid` FK     | → `auth.users`                   |
+| `name`       | `text`        |                                  |
+| `type`       | `text`        | `CHECK IN ('income', 'expense')` |
+| `color`      | `text`        | Hex for UI                       |
+| `is_default` | `boolean`     | `DEFAULT false`                  |
+| `created_at` | `timestamptz` |                                  |
 
 **Default expense categories** (seeded on signup):
 Highway, EPF/ETF, Insurance, Electricity, Internet, Telephone, Mobiles, TV, Savings, General, Trip, Home, Other
@@ -211,301 +196,420 @@ Highway, EPF/ETF, Insurance, Electricity, Internet, Telephone, Mobiles, TV, Savi
 
 ---
 
-### 10.3 `transactions`
+### 10.3 `bank_accounts` _(new)_
 
-Individual income/expense entries.
+User's bank accounts, credit cards, and e-wallets.
 
-| Column        | Type            | Notes                                   |
-| ------------- | --------------- | --------------------------------------- |
-| `id`          | `uuid` PK       |                                         |
-| `user_id`     | `uuid` FK       | -> `auth.users`                         |
-| `category_id` | `uuid` FK       | -> `categories` (`ON DELETE SET NULL`)  |
-| `amount`      | `numeric(12,2)` |                                         |
-| `type`        | `text`          | `CHECK (type IN ('income', 'expense'))` |
-| `date`        | `date`          |                                         |
-| `notes`       | `text`          | Nullable                                |
-| `created_at`  | `timestamptz`   |                                         |
+| Column         | Type          | Notes                                      |
+| -------------- | ------------- | ------------------------------------------ |
+| `id`           | `uuid` PK     |                                            |
+| `user_id`      | `uuid` FK     | → `auth.users`                             |
+| `name`         | `text`        | e.g. "Combank Savings", "HNB Credit Card"  |
+| `account_type` | `text`        | `CHECK IN ('savings', 'credit', 'wallet')` |
+| `color`        | `text`        | Hex, for UI badge                          |
+| `is_active`    | `boolean`     | `DEFAULT true`                             |
+| `created_at`   | `timestamptz` |                                            |
+
+**`account_type` behaviour:**
+
+- `savings` — receives salary allocations; all regular expenses deducted from here
+- `credit` — credit card; CC installment plans are linked here; no salary allocation
+- `wallet` — e-wallets (Frimi, etc.)
 
 ---
 
-### 10.4 `budgets`
+### 10.4 `salary_allocations` _(new)_
 
-Monthly income declaration per user per month.
+Monthly distribution of salary across accounts.
 
-| Column       | Type            | Notes                                  |
-| ------------ | --------------- | -------------------------------------- |
-| `id`         | `uuid` PK       |                                        |
-| `user_id`    | `uuid` FK       | -> `auth.users`                        |
-| `month`      | `date`          | Always 1st of month, e.g. `2026-08-01` |
-| `income`     | `numeric(12,2)` |                                        |
-| `notes`      | `text`          | Nullable                               |
-| `created_at` | `timestamptz`   |                                        |
+When salary arrives, the user sets how much goes to each account (e.g. LKR 50,000 → Combank Savings, LKR 20,000 → Sampath). This represents the user's planned spending envelope per account for the month. It is separate from `budgets` (which records total income) — together they give:
+
+> **Unallocated = budgets.income − SUM(salary_allocations.amount)**
+
+| Column            | Type            | Notes                       |
+| ----------------- | --------------- | --------------------------- |
+| `id`              | `uuid` PK       |                             |
+| `user_id`         | `uuid` FK       | → `auth.users`              |
+| `bank_account_id` | `uuid` FK       | → `bank_accounts`           |
+| `month`           | `date`          | Always 1st of month         |
+| `amount`          | `numeric(12,2)` | Amount sent to this account |
+| `notes`           | `text`          | Nullable                    |
+| `created_at`      | `timestamptz`   |                             |
+
+**Constraint**: `UNIQUE (user_id, bank_account_id, month)`
+
+---
+
+### 10.5 `budgets`
+
+Monthly total income declaration.
+
+| Column       | Type            | Notes                             |
+| ------------ | --------------- | --------------------------------- |
+| `id`         | `uuid` PK       |                                   |
+| `user_id`    | `uuid` FK       | → `auth.users`                    |
+| `month`      | `date`          | Always 1st of month               |
+| `income`     | `numeric(12,2)` | Total salary/income for the month |
+| `notes`      | `text`          | Nullable                          |
+| `created_at` | `timestamptz`   |                                   |
 
 **Constraint**: `UNIQUE (user_id, month)`
 
 ---
 
-### 10.5 `recurring_templates`
+### 10.6 `transactions`
 
-Master list of open-ended recurring expenses. Auto-generates `transactions` rows each month client-side.
+Individual income/expense entries. Source column distinguishes manual vs auto-generated entries.
 
-| Column        | Type            | Notes                                  |
-| ------------- | --------------- | -------------------------------------- |
-| `id`          | `uuid` PK       |                                        |
-| `user_id`     | `uuid` FK       | -> `auth.users`                        |
-| `category_id` | `uuid` FK       | -> `categories` (`ON DELETE SET NULL`) |
-| `label`       | `text`          | e.g. `"Netflix"`, `"Internet Bill"`    |
-| `amount`      | `numeric(12,2)` |                                        |
-| `paid_via`    | `text`          | e.g. `"HNB Account"` — nullable        |
-| `start_date`  | `date`          | First month this applies               |
-| `end_date`    | `date`          | `NULL` = indefinite                    |
-| `is_active`   | `boolean`       | `DEFAULT true`                         |
-| `created_at`  | `timestamptz`   |                                        |
+| Column                | Type            | Notes                                                                           |
+| --------------------- | --------------- | ------------------------------------------------------------------------------- |
+| `id`                  | `uuid` PK       |                                                                                 |
+| `user_id`             | `uuid` FK       | → `auth.users`                                                                  |
+| `category_id`         | `uuid` FK       | → `categories` (`ON DELETE SET NULL`)                                           |
+| `bank_account_id`     | `uuid` FK       | → `bank_accounts` (`ON DELETE SET NULL`) _(new)_                                |
+| `amount`              | `numeric(12,2)` |                                                                                 |
+| `type`                | `text`          | `CHECK IN ('income', 'expense')`                                                |
+| `date`                | `date`          |                                                                                 |
+| `notes`               | `text`          | Nullable                                                                        |
+| `source`              | `text`          | `CHECK IN ('manual', 'recurring', 'installment')` — `DEFAULT 'manual'`          |
+| `template_id`         | `uuid` FK       | → `recurring_templates` (`ON DELETE SET NULL`); set when `source = 'recurring'` |
+| `installment_plan_id` | `uuid` FK       | → `installment_plans` (`ON DELETE SET NULL`); set when `source = 'installment'` |
+| `created_at`          | `timestamptz`   |                                                                                 |
 
----
-
-### 10.6 `installment_plans`
-
-Credit card / loan installments with a fixed number of payments. Each month, one
-transaction is auto-generated client-side until `total_installments` payments have been made.
-
-| Column               | Type            | Notes                                  |
-| -------------------- | --------------- | -------------------------------------- |
-| `id`                 | `uuid` PK       |                                        |
-| `user_id`            | `uuid` FK       | -> `auth.users`                        |
-| `category_id`        | `uuid` FK       | -> `categories` (`ON DELETE SET NULL`) |
-| `label`              | `text`          | e.g. `"MacBook Pro - HNB CC"`          |
-| `total_amount`       | `numeric(12,2)` | Original purchase price                |
-| `monthly_amount`     | `numeric(12,2)` | Amount per installment                 |
-| `total_installments` | `int`           | e.g. `12`                              |
-| `paid_installments`  | `int`           | `DEFAULT 0`, incremented each month    |
-| `start_date`         | `date`          | Date of first payment                  |
-| `paid_via`           | `text`          | e.g. `"HNB Credit Card"` — nullable    |
-| `notes`              | `text`          | Nullable                               |
-| `is_active`          | `boolean`       | `DEFAULT true`                         |
-| `created_at`         | `timestamptz`   |                                        |
+**Key rule — immutability of past transactions:**
+Editing a transaction's amount only changes that specific row. It does NOT propagate to the template or other months. Past months are always a frozen snapshot of what was actually spent.
 
 ---
 
-### 10.7 `user_settings`
+### 10.7 `recurring_templates`
 
-Per-user app preferences.
+Open-ended recurring expenses (e.g. Internet, Netflix). The `amount` column always holds the **current/latest** amount. Historical amounts are stored in `recurring_amount_history`.
 
-| Column                  | Type          | Notes                       |
-| ----------------------- | ------------- | --------------------------- |
-| `user_id`               | `uuid` PK     | References `auth.users(id)` |
-| `currency`              | `text`        | `DEFAULT 'LKR'`             |
-| `theme`                 | `text`        | `DEFAULT 'light'`           |
-| `notifications_enabled` | `boolean`     | `DEFAULT true`              |
-| `updated_at`            | `timestamptz` |                             |
-
----
-
-### 10.8 Row Level Security (RLS)
-
-RLS is enabled on **all** tables. Policies are scoped to `auth.uid() = user_id`
-(or `auth.uid() = id` for `profiles`). `user_settings` has no DELETE policy — that row is permanent.
-
-| Table                 | Policies                       |
-| --------------------- | ------------------------------ |
-| `profiles`            | SELECT, UPDATE                 |
-| `categories`          | SELECT, INSERT, UPDATE, DELETE |
-| `transactions`        | SELECT, INSERT, UPDATE, DELETE |
-| `budgets`             | SELECT, INSERT, UPDATE, DELETE |
-| `recurring_templates` | SELECT, INSERT, UPDATE, DELETE |
-| `installment_plans`   | SELECT, INSERT, UPDATE, DELETE |
-| `user_settings`       | SELECT, INSERT, UPDATE         |
+| Column            | Type            | Notes                           |
+| ----------------- | --------------- | ------------------------------- |
+| `id`              | `uuid` PK       |                                 |
+| `user_id`         | `uuid` FK       | → `auth.users`                  |
+| `category_id`     | `uuid` FK       | → `categories`                  |
+| `bank_account_id` | `uuid` FK       | → `bank_accounts` _(new)_       |
+| `label`           | `text`          | e.g. "Netflix", "Internet Bill" |
+| `amount`          | `numeric(12,2)` | Current latest amount           |
+| `paid_via`        | `text`          | Free-text fallback              |
+| `start_date`      | `date`          | First month this applies        |
+| `end_date`        | `date`          | Nullable = indefinite           |
+| `is_active`       | `boolean`       | `DEFAULT true`                  |
+| `created_at`      | `timestamptz`   |                                 |
 
 ---
 
-### 10.9 Signup Trigger
+### 10.8 `recurring_amount_history` _(new)_
 
-A `SECURITY DEFINER` function `handle_new_user()` fires `AFTER INSERT ON auth.users` and:
+Audit trail of amount changes on recurring templates. Enables forward-only updates.
 
-1. Creates a row in `profiles` (populates `full_name` from `raw_user_meta_data`)
-2. Creates a row in `user_settings` with defaults
-3. Seeds all 13 default expense categories + 1 income category into `categories`
+| Column           | Type            | Notes                               |
+| ---------------- | --------------- | ----------------------------------- |
+| `id`             | `uuid` PK       |                                     |
+| `template_id`    | `uuid` FK       | → `recurring_templates`             |
+| `user_id`        | `uuid` FK       | → `auth.users`                      |
+| `amount`         | `numeric(12,2)` | The amount effective from this date |
+| `effective_from` | `date`          | Always 1st of month                 |
+| `created_at`     | `timestamptz`   |                                     |
+
+**Constraint**: `UNIQUE (template_id, effective_from)` — one amount per template per month.
+
+**RLS**: select + insert only. History rows are **immutable** (no update/delete policies).
+
+---
+
+### 10.9 `installment_plans`
+
+Fixed-count credit card / loan installments.
+
+| Column                 | Type            | Notes                                                              |
+| ---------------------- | --------------- | ------------------------------------------------------------------ |
+| `id`                   | `uuid` PK       |                                                                    |
+| `user_id`              | `uuid` FK       | → `auth.users`                                                     |
+| `category_id`          | `uuid` FK       | → `categories`                                                     |
+| `bank_account_id`      | `uuid` FK       | → `bank_accounts` _(new; usually a `credit` account)_              |
+| `label`                | `text`          | e.g. "MacBook Pro — HNB CC"                                        |
+| `total_amount`         | `numeric(12,2)` | Original purchase price                                            |
+| `monthly_amount`       | `numeric(12,2)` | Current/latest installment amount                                  |
+| `total_installments`   | `int`           | e.g. 12                                                            |
+| `paid_installments`    | `int`           | `DEFAULT 0`; incremented on each auto-generated payment            |
+| `start_date`           | `date`          | First payment month                                                |
+| `paid_via`             | `text`          | Free-text fallback                                                 |
+| `cc_carry_forward`     | `boolean`       | `DEFAULT false`; if true, any unpaid portion rolls into next month |
+| `carry_forward_amount` | `numeric(12,2)` | `DEFAULT 0`; tracks rolled-over unpaid amount                      |
+| `notes`                | `text`          | Nullable                                                           |
+| `is_active`            | `boolean`       | `DEFAULT true`; auto-set to false when all installments paid       |
+| `created_at`           | `timestamptz`   |                                                                    |
+
+---
+
+### 10.10 `installment_amount_history` _(new)_
+
+Same forward-only pattern as `recurring_amount_history`. When `monthly_amount` changes, a new row is inserted here; past auto-generated transactions are never touched.
+
+| Column           | Type            | Notes                 |
+| ---------------- | --------------- | --------------------- |
+| `id`             | `uuid` PK       |                       |
+| `plan_id`        | `uuid` FK       | → `installment_plans` |
+| `user_id`        | `uuid` FK       | → `auth.users`        |
+| `monthly_amount` | `numeric(12,2)` |                       |
+| `effective_from` | `date`          | Always 1st of month   |
+| `created_at`     | `timestamptz`   |                       |
+
+**Constraint**: `UNIQUE (plan_id, effective_from)`
+
+**RLS**: select + insert only. Immutable.
+
+---
+
+### 10.11 `user_settings`
+
+| Column                  | Type          | Notes             |
+| ----------------------- | ------------- | ----------------- |
+| `user_id`               | `uuid` PK FK  | → `auth.users`    |
+| `currency`              | `text`        | `DEFAULT 'LKR'`   |
+| `theme`                 | `text`        | `DEFAULT 'light'` |
+| `notifications_enabled` | `boolean`     | `DEFAULT true`    |
+| `updated_at`            | `timestamptz` |                   |
 
 ---
 
 ## 11. Recurring Expense Logic
 
-- When a user opens a month, the app checks `recurring_templates` for all active
-  templates where `start_date <= month` and (`end_date IS NULL OR end_date >= month`).
-- Any template not yet represented in `transactions` for that month gets auto-inserted
-  via a TanStack Query mutation on month load.
-- Runs client-side — no cron job or edge function needed.
-- The user can edit or delete the auto-inserted row for that month without affecting
-  the template or other months.
+When a user opens a month, the client runs this logic for `recurring_templates`:
+
+1. Fetch all active templates where `start_date <= month` AND (`end_date IS NULL OR end_date >= month`).
+2. For each template, check if a `transactions` row already exists for that month with `template_id = template.id`.
+3. If not → auto-insert a transaction using the amount **effective for that month**:
+   ```
+   SELECT amount FROM recurring_amount_history
+   WHERE template_id = :id AND effective_from <= :month
+   ORDER BY effective_from DESC LIMIT 1
+   ```
+   If no history row exists yet (template is new), fall back to `recurring_templates.amount`.
+4. The auto-inserted transaction is independent — the user can edit or delete it for this month without affecting the template or any other month.
+
+**Amount change flow (forward-only):**
+
+1. User changes the amount on a recurring template from month M onward.
+2. App updates `recurring_templates.amount` (the display value).
+3. App inserts a row in `recurring_amount_history` with `effective_from = M`.
+4. All already-generated transactions for months < M are **untouched**.
+5. Next time month M (or later) is opened, step 3 above picks up the new history row.
 
 ---
 
 ## 12. Installment Plan Logic
 
-- `installment_plans` tracks purchases split into a fixed number of monthly payments.
-- Each month the app checks active plans where `start_date <= month` and
-  `paid_installments < total_installments`.
-- A transaction for `monthly_amount` is auto-generated client-side for each qualifying plan.
-- `paid_installments` is incremented on each auto-generated payment.
-- When `paid_installments === total_installments` the plan's `is_active` flag is set to `false`.
+When a user opens a month, the client runs this logic for `installment_plans`:
+
+1. Fetch all active plans where `start_date <= month` AND `paid_installments < total_installments`.
+2. For each plan, check if a `transactions` row already exists for that month with `installment_plan_id = plan.id`.
+3. If not → determine the amount for this month:
+   ```
+   SELECT monthly_amount FROM installment_amount_history
+   WHERE plan_id = :id AND effective_from <= :month
+   ORDER BY effective_from DESC LIMIT 1
+   ```
+   Fall back to `installment_plans.monthly_amount` if no history row.
+4. If `cc_carry_forward = true`, add `carry_forward_amount` to this month's transaction amount.
+5. Auto-insert the transaction (`source = 'installment'`, `installment_plan_id = plan.id`).
+6. Increment `paid_installments`. If `paid_installments = total_installments`, set `is_active = false`.
+7. Reset `carry_forward_amount = 0` after it has been folded into the new transaction.
+
+**CC carry-forward flow:**
+
+- If a user marks a CC installment as partially paid this month (e.g. paid LKR 8,000 of a LKR 10,000 installment), the app updates the transaction amount to 8,000 and sets `carry_forward_amount = 2,000` on the plan.
+- Next month's auto-generated transaction will be `monthly_amount + 2,000`.
+- `paid_installments` is only incremented when the **full** monthly amount (excluding carry-forward) has been covered.
+
+**Amount change flow (forward-only):** Same pattern as recurring templates — insert into `installment_amount_history`, never touch past transactions.
 
 ---
 
-## 13. TanStack Router — File-Based Route Structure
+## 13. Bank Account & Salary Allocation Flow
 
-\`\`\`
+This is the monthly workflow for distributing salary:
+
+1. User sets total income in **Budgets** for the month (`budgets.income`).
+2. User goes to **Salary Allocations** and assigns how much goes to each account:
+   - e.g. LKR 50,000 → Combank Savings, LKR 30,000 → Sampath, LKR 20,000 → HNB
+3. Dashboard shows:
+   - **Total Income**: from `budgets.income`
+   - **Total Allocated**: SUM of `salary_allocations.amount` for this month
+   - **Unallocated**: income − allocated (should ideally reach zero)
+4. Each transaction is tagged with a `bank_account_id` — so per-account spending is trackable.
+5. Per-account summary = `salary_allocations.amount` − SUM(`transactions.amount WHERE bank_account_id = X AND month = M`).
+
+**No inter-account transfers are tracked** — only salary-in and expense-out per account.
+
+---
+
+## 14. TanStack Router — File-Based Route Structure
+
+```
 src/routes/
-├── __root.tsx # Root layout (Toaster, QueryClientProvider, RouterDevtools)
-├── index.tsx # Redirects to /dashboard
-├── _auth/ # Layout route — unauthenticated only
-│ ├── route.tsx # Redirects to /dashboard if already logged in
-│ ├── login.tsx
-│ └── sign-up.tsx
-└── _app/ # Layout route — authenticated only
-├── route.tsx # Sidebar + top nav shell; redirects to /login if no session
-├── dashboard.tsx
-├── income.tsx
-├── recurring.tsx
-├── installments.tsx
-├── categories.tsx
-└── settings.tsx
-\`\`\`
-
-Auth guard lives in `_app/route.tsx` using TanStack Router's `beforeLoad` — no separate HOC needed.
+├── __root.tsx           # Root layout (Toaster, QueryClientProvider, RouterDevtools)
+├── index.tsx            # Redirects to /dashboard
+├── _auth/
+│   ├── route.tsx        # Redirects to /dashboard if logged in
+│   ├── login.tsx
+│   └── sign-up.tsx
+└── _app/
+    ├── route.tsx         # Sidebar + nav shell; beforeLoad auth guard
+    ├── dashboard.tsx
+    ├── income.tsx
+    ├── accounts.tsx      # Bank accounts + salary allocations (new)
+    ├── recurring.tsx
+    ├── installments.tsx
+    ├── categories.tsx
+    └── settings.tsx
+```
 
 ---
 
-## 14. TanStack Query — Key Query/Mutation Keys
+## 15. TanStack Query — Key Query/Mutation Keys
 
-\`\`\`ts
-// Query keys (centralised in src/lib/query-keys.ts)
+```ts
+// src/lib/query-keys.ts
 export const queryKeys = {
-transactions: (userId: string, month: string) => ['transactions', userId, month],
-budget: (userId: string, month: string) => ['budget', userId, month],
-categories: (userId: string) => ['categories', userId],
-recurring: (userId: string) => ['recurring', userId],
-installments: (userId: string) => ['installments', userId],
-profile: (userId: string) => ['profile', userId],
-userSettings: (userId: string) => ['user-settings', userId],
+  transactions: (userId: string, month: string) => ['transactions', userId, month],
+  budget: (userId: string, month: string) => ['budget', userId, month],
+  categories: (userId: string) => ['categories', userId],
+  recurring: (userId: string) => ['recurring', userId],
+  recurringAmountHistory: (templateId: string) => ['recurring-amount-history', templateId],
+  installments: (userId: string) => ['installments', userId],
+  installmentAmountHistory: (planId: string) => ['installment-amount-history', planId],
+  bankAccounts: (userId: string) => ['bank-accounts', userId],
+  salaryAllocations: (userId: string, month: string) => ['salary-allocations', userId, month],
+  profile: (userId: string) => ['profile', userId],
+  userSettings: (userId: string) => ['user-settings', userId],
 }
-\`\`\`
+```
 
 ---
 
-## 15. Application Pages & Features
+## 16. Application Pages & Features
 
-### 15.1 Auth Pages (`_auth/`)
+### 16.1 Auth (`_auth/`)
 
-- `/login` — Email + password sign in
-- `/signup` — Register new account (+ seeds default categories via Supabase DB trigger)
+- `/login` — Email + password
+- `/sign-up` — Register (DB trigger seeds profile, settings, default categories)
 
-### 15.2 Dashboard (`_app/dashboard`)
+### 16.2 Dashboard (`_app/dashboard`)
 
-- Month selector (Zustand `useUIStore.selectedMonth`, default: current month)
-- **Summary cards**: Total Income | Total Expenses | Net Saving (colour-coded)
-- **Category breakdown**: Donut/bar chart (Recharts) showing spend by category
-- **Transaction table**: All transactions for selected month, grouped by category, edit/delete per row
-- **Quick-add** button — shadcn Sheet (slide-over) with transaction form
+- Month selector (Zustand `use-ui-store.selectedMonth`)
+- **Summary cards**: Total Income | Total Expenses | Net Saving
+- **Allocation summary**: Total Allocated | Unallocated | per-account balance (allocated − spent)
+- **Category breakdown chart**: Recharts donut
+- **Transaction table**: grouped by category; edit/delete per row; quick-add slide-over
 
-### 15.3 Income Page (`_app/income`)
+### 16.3 Income (`_app/income`)
 
-- Set/edit monthly income for the selected month
-- Income history table across past months
+- Set/edit monthly income for selected month
+- Income history table
 
-### 15.4 Recurring Expenses (`_app/recurring`)
+### 16.4 Accounts (`_app/accounts`) _(new)_
+
+- **Bank accounts list**: add / edit / deactivate accounts (name, type, colour)
+- **Salary allocations panel**: for the selected month, set how much goes to each account
+- Shows: Allocated so far | Remaining to allocate | Per-account: allocated vs. spent vs. balance
+
+### 16.5 Recurring (`_app/recurring`)
 
 - List all recurring templates
-- Add / edit / deactivate templates
-- Status badge: Active | Ending Soon (< 2 months) | Ended
+- Add / edit / deactivate
+- **Amount change**: editing amount prompts "Apply from which month?" — inserts history row, never touches past transactions
+- Status badge: Active | Ending Soon | Ended
 
-### 15.5 Installments (`_app/installments`)
+### 16.6 Installments (`_app/installments`)
 
-- List all installment plans with progress (e.g. 3/12 paid)
-- Add / edit / deactivate plans
-- Progress bar showing paid vs. remaining installments
-- Auto-generates a monthly transaction each period until complete
+- List all plans with progress bar (e.g. 3 / 12 paid)
+- Add / edit / deactivate
+- CC carry-forward toggle
+- **Amount change**: same forward-only flow as recurring
+- Shows carry-forward amount if any
 
-### 15.6 Categories (`_app/categories`)
+### 16.7 Categories (`_app/categories`)
 
-- List all categories (preloaded + user-added)
-- Add new (name, type, colour picker)
-- Edit name/colour; cannot delete if transactions reference it — soft-disable instead
+- List (preloaded + user-added)
+- Add / edit; soft-disable if transactions reference it
 
-### 15.7 Settings (`_app/settings`)
+### 16.8 Settings (`_app/settings`)
 
-- Change display name
-- Change password (Supabase updateUser)
-- Currency display (default LKR)
-- Theme preference (light/dark)
-- Notification toggle
+- Display name, password, currency, theme, notifications toggle
 
 ---
 
-## 16. UI / UX
+## 17. UI / UX
 
-- **Responsive**: mobile-first card layout; sidebar collapses to bottom tab bar on small screens using shadcn Sheet.
-- **Theme**: shadcn new-york style, Slate base, OKLCH color variables, supports dark mode.
-- **Sonner**: replaces shadcn Toast (deprecated in Tailwind v4 era) for all notifications.
-- **Forms**: shadcn Form + React Hook Form + Zod. Use `z.infer<typeof schema>` (not `z.output`) as the form generic — `zodResolver` uses `z.infer` internally.
-- **Empty states**: friendly illustrated prompts when no data for a month.
+- **Responsive**: mobile-first; sidebar → bottom tab bar on small screens (shadcn Sheet).
+- **Theme**: shadcn new-york, Slate base, OKLCH, dark mode supported.
+- **Sonner** for toast notifications.
+- **Forms**: shadcn Form + React Hook Form + Zod. Use `z.infer<typeof schema>` (not `z.output`) as the form generic.
+- **Empty states**: friendly prompts when no data exists for a month.
 
 ---
 
-## 17. Folder Structure
+## 18. Folder Structure
 
-All folders and files use **kebab-case** except library-generated files and standard config files.
-
-\`\`\`
+```
 budget-tracker/
 ├── public/
 ├── src/
-│ ├── components/
-│ │ ├── ui/ # shadcn generated (lib convention, leave as-is)
-│ │ ├── layout/
-│ │ │ ├── app-sidebar.tsx
-│ │ │ ├── top-bar.tsx
-│ │ │ ├── mobile-nav.tsx
-│ │ │ └── month-selector.tsx
-│ │ └── charts/
-│ │ ├── expense-donut.tsx
-│ │ └── summary-bar.tsx
-│ ├── routes/
-│ │ ├── __root.tsx
-│ │ ├── index.tsx
-│ │ ├── _auth/
-│ │ │ ├── route.tsx
-│ │ │ ├── login.tsx
-│ │ │ └── sign-up.tsx
-│ │ └── _app/
-│ │ ├── route.tsx
-│ │ ├── dashboard.tsx
-│ │ ├── income.tsx
-│ │ ├── recurring.tsx
-│ │ ├── installments.tsx
-│ │ ├── categories.tsx
-│ │ └── settings.tsx
-│ ├── stores/
-│ │ ├── use-auth-store.ts
-│ │ └── use-ui-store.ts
-│ ├── hooks/
-│ │ ├── use-transactions.ts
-│ │ ├── use-budget.ts
-│ │ ├── use-categories.ts
-│ │ ├── use-recurring.ts
-│ │ └── use-installments.ts
-│ ├── lib/
-│ │ ├── supabase.ts
-│ │ └── query-keys.ts
-│ ├── utils/
-│ │ └── recurring.ts
-│ ├── types/
-│ │ └── database.types.ts # Generated by Supabase CLI (DO NOT EDIT)
-│ ├── routeTree.gen.ts # Generated by TanStack Router (DO NOT EDIT)
-│ ├── main.tsx
-│ └── index.css
+│   ├── components/
+│   │   ├── ui/                        # shadcn generated (leave as-is)
+│   │   ├── layout/
+│   │   │   ├── app-sidebar.tsx
+│   │   │   ├── top-bar.tsx
+│   │   │   ├── mobile-nav.tsx
+│   │   │   └── month-selector.tsx
+│   │   └── charts/
+│   │       ├── expense-donut.tsx
+│   │       └── summary-bar.tsx
+│   ├── routes/
+│   │   ├── __root.tsx
+│   │   ├── index.tsx
+│   │   ├── _auth/
+│   │   │   ├── route.tsx
+│   │   │   ├── login.tsx
+│   │   │   └── sign-up.tsx
+│   │   └── _app/
+│   │       ├── route.tsx
+│   │       ├── dashboard.tsx
+│   │       ├── income.tsx
+│   │       ├── accounts.tsx
+│   │       ├── recurring.tsx
+│   │       ├── installments.tsx
+│   │       ├── categories.tsx
+│   │       └── settings.tsx
+│   ├── stores/
+│   │   ├── use-auth-store.ts
+│   │   └── use-ui-store.ts
+│   ├── hooks/
+│   │   ├── use-transactions.ts
+│   │   ├── use-budget.ts
+│   │   ├── use-categories.ts
+│   │   ├── use-recurring.ts
+│   │   ├── use-installments.ts
+│   │   ├── use-bank-accounts.ts
+│   │   └── use-salary-allocations.ts
+│   ├── lib/
+│   │   ├── supabase.ts
+│   │   └── query-keys.ts
+│   ├── utils/
+│   │   ├── recurring.ts       # auto-populate + amount history lookup
+│   │   └── installments.ts    # auto-populate + carry-forward logic
+│   ├── types/
+│   │   └── database.types.ts  # Supabase CLI generated (DO NOT EDIT)
+│   ├── routeTree.gen.ts       # TanStack Router generated (DO NOT EDIT)
+│   ├── main.tsx
+│   └── index.css
 ├── docs/
-│ ├── system-design.md
-│ └── supabase-schema.sql
+│   ├── system-design.md
+│   └── supabase-schema.sql
 ├── .env
 ├── .env.example
 ├── .prettierrc
@@ -516,53 +620,56 @@ budget-tracker/
 ├── tsconfig.json
 ├── tsconfig.app.json
 └── package.json
-\`\`\`
+```
 
 ---
 
-## 18. Deployment
+## 19. Deployment
 
-1. **Supabase** — Create project, run `docs/supabase-schema.sql` in SQL Editor. RLS and email auth are fully configured by the script.
-2. **GitHub** — Push to repo (add `.env` to `.gitignore`).
-3. **Cloudflare Pages** — Connect GitHub repo, build command: `npm run build`, output dir: `dist`, add Supabase env vars.
+1. **Supabase** — Create project, run `docs/supabase-schema.sql` in SQL Editor. RLS and trigger fully configured by the script.
+2. **GitHub** — Push (`.env` in `.gitignore`).
+3. **Cloudflare Pages** — Connect repo, build: `pnpm build`, output: `dist`, add Supabase env vars.
 4. Every push to `main` auto-deploys.
 
 ---
 
-## 19. Implementation Phases
+## 20. Implementation Phases
 
-| Phase        | Scope                                                                                  | Status      |
-| ------------ | -------------------------------------------------------------------------------------- | ----------- |
-| **Phase 1**  | Supabase: schema SQL, RLS policies, seed trigger                                       | Done        |
-| **Phase 2**  | Project scaffold: Vite + TS + Tailwind v4 + shadcn + TanStack Router + Query + Zustand | Done        |
-| **Phase 3**  | Auth flow: login, signup, Zustand auth store, route guards via `beforeLoad`            | Done        |
-| **Phase 4**  | Dashboard: transaction CRUD, monthly summary, TanStack Query hooks                     | In progress |
-| **Phase 5**  | Income page                                                                            | Pending     |
-| **Phase 6**  | Recurring templates + auto-populate logic                                              | In progress |
-| **Phase 7**  | Installment plans + auto-generate monthly transactions                                 | In progress |
-| **Phase 8**  | Categories management                                                                  | Pending     |
-| **Phase 9**  | Charts (Recharts donut + summary bar)                                                  | Pending     |
-| **Phase 10** | Settings (profile, password, currency, theme, notifications)                           | Pending     |
-| **Phase 11** | Dark mode, responsive polish                                                           | Pending     |
-
----
-
-## 20. Security Notes
-
-- RLS enabled on ALL tables — users can never access another user's rows, enforced at DB level.
-- Supabase anon key is safe to expose in the Vite env (only works within RLS boundaries).
-- No sensitive logic in the client beyond what Supabase enforces server-side.
-- Passwords managed entirely by Supabase Auth (bcrypt, never stored in app DB).
-- `routeTree.gen.ts` is read-only (managed by TanStack Router plugin) — add to `.eslintignore` and VSCode readonly settings.
+| Phase        | Scope                                                                         | Status      |
+| ------------ | ----------------------------------------------------------------------------- | ----------- |
+| **Phase 1**  | Supabase schema SQL, RLS, seed trigger                                        | ✅ Done     |
+| **Phase 2**  | Project scaffold: Vite + TS + Tailwind v4 + shadcn + Router + Query + Zustand | ✅ Done     |
+| **Phase 3**  | Auth flow: login, sign-up, Zustand auth store, beforeLoad guard               | ✅ Done     |
+| **Phase 4**  | Bank accounts + salary allocations (new)                                      | Pending     |
+| **Phase 5**  | Dashboard: transaction CRUD, monthly summary, allocation summary              | In progress |
+| **Phase 6**  | Income page                                                                   | Pending     |
+| **Phase 7**  | Recurring templates + amount history + auto-populate                          | In progress |
+| **Phase 8**  | Installment plans + CC carry-forward + amount history                         | In progress |
+| **Phase 9**  | Categories management                                                         | Pending     |
+| **Phase 10** | Charts (Recharts donut + summary bar)                                         | Pending     |
+| **Phase 11** | Settings page                                                                 | Pending     |
+| **Phase 12** | Dark mode, responsive polish                                                  | Pending     |
 
 ---
 
-## 21. Known Gotchas
+## 21. Security Notes
 
-- **Zod + React Hook Form**: When using `z.string().optional().default('')`, always type
-  `useForm<z.infer<typeof schema>>`, **not** `z.output`. `zodResolver` uses `z.infer` internally;
-  using `z.output` causes a TypeScript resolver type mismatch on optional fields with defaults.
+- RLS on ALL tables — DB-level isolation, not app-level.
+- `recurring_amount_history` and `installment_amount_history` have **no update/delete RLS policies** — making them append-only audit logs.
+- Supabase anon key safe to expose in Vite env (RLS enforces access).
+- Passwords via Supabase Auth (bcrypt).
+- `routeTree.gen.ts` → add to `.eslintignore`.
 
 ---
 
-_Document version: 3.0 — synced with implemented schema (transactions, installment_plans, user_settings); added RLS policy table, trigger details, installments page and logic, known gotchas_
+## 22. Known Gotchas
+
+- **Zod + React Hook Form**: type the form as `useForm<z.infer<typeof schema>>`, not `z.output`. `zodResolver` uses `z.infer` internally.
+- **Recurring auto-populate**: always check for an existing transaction with `template_id = X AND date_trunc('month', date) = :month` before inserting — prevents double-inserts if the user navigates away and back.
+- **Installment carry-forward**: `carry_forward_amount` must be reset to `0` on the plan **after** it has been folded into the new transaction, in the same mutation batch — not separately — to avoid double-carry on page refresh.
+- **`effective_from` lookup**: always query `recurring_amount_history` with `effective_from <= :month ORDER BY effective_from DESC LIMIT 1`. Do not assume the latest row in the table is the correct one.
+- **`salary_allocations` totals**: the dashboard unallocated figure is computed client-side as `budgets.income - SUM(salary_allocations.amount)`. If no `budgets` row exists for the month yet, treat income as 0 rather than null to avoid NaN in the UI.
+
+---
+
+_Document version: 4.0 — bank_accounts, salary_allocations, forward-only amount history (recurring + installments), CC carry-forward, accounts page, updated logic sections, gotchas_

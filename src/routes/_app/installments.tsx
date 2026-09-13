@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { CreditCard, Plus } from 'lucide-react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
 
 import { InstallmentCard } from '@/components/installment-card'
@@ -22,6 +22,7 @@ import {
   installmentsQueryOptions,
   useAddInstallment,
   useDeleteInstallment,
+  useMarkInstallmentPaid,
   useUpdateInstallment,
 } from '@/hooks/use-installments'
 
@@ -56,6 +57,7 @@ function InstallmentsPage() {
   const { mutate: addInstallment } = useAddInstallment()
   const { mutate: updateInstallment } = useUpdateInstallment()
   const { mutate: deleteInstallment } = useDeleteInstallment()
+  const { mutate: markPaid } = useMarkInstallmentPaid()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
 
@@ -75,8 +77,14 @@ function InstallmentsPage() {
     },
   })
 
-  const monthlyAmount = form.watch('monthlyAmount')
-  const totalInstallments = form.watch('totalInstallments')
+  const monthlyAmount = useWatch({
+    control: form.control,
+    name: 'monthlyAmount',
+  })
+  const totalInstallments = useWatch({
+    control: form.control,
+    name: 'totalInstallments',
+  })
 
   useEffect(() => {
     form.setValue('totalAmount', (monthlyAmount || 0) * (totalInstallments || 0), {
@@ -379,6 +387,7 @@ function InstallmentsPage() {
                 creditCards={creditCards}
                 onEdit={() => openDialog(plan)}
                 onDelete={() => deleteInstallment(plan.id)}
+                onMarkPaid={() => markPaid({ id: plan.id, paidInstallments: plan.paidInstallments + 1 })}
               />
             ))}
           </div>
