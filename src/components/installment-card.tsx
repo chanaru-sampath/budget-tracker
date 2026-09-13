@@ -5,6 +5,7 @@ import {
   getInstallmentEndDate,
   getRemainingAmount,
   getRemainingInstallments,
+  isCurrentMonthPaid,
 } from '@/hooks/use-installments'
 
 import { Badge } from './ui/badge'
@@ -18,12 +19,14 @@ export function InstallmentCard({
   onEdit,
   onDelete,
   dimmed = false,
+  onMarkPaid,
 }: {
   plan: InstallmentPlan
   categories: { id: string; name: string; color: string; type: string }[]
   creditCards: { id: string; name: string; color: string }[]
   onEdit: () => void
   onDelete: () => void
+  onMarkPaid?: () => void
   dimmed?: boolean
 }) {
   const category = categories.find((c) => c.id === plan.categoryId)
@@ -32,6 +35,7 @@ export function InstallmentCard({
   const endDate = getInstallmentEndDate(plan)
   const progress = Math.round((plan.paidInstallments / plan.totalInstallments) * 100)
   const isComplete = remaining <= 0
+  const isPaidForCurrentMonth = isCurrentMonthPaid(plan)
 
   return (
     <Card className={`group border-border shadow-sm transition-shadow hover:shadow-md ${dimmed ? 'opacity-60' : ''}`}>
@@ -113,7 +117,7 @@ export function InstallmentCard({
             ) : null
           })()}
 
-        <div className="pt-1">
+        <div className="pt-1 flex items-center justify-between">
           {isComplete ? (
             <Badge variant="outline" className="gap-1 border-emerald-500/30 text-emerald-600">
               <CheckCircle2 className="h-3 w-3" /> Completed
@@ -122,6 +126,18 @@ export function InstallmentCard({
             <Badge variant="outline" className="gap-1 border-orange-400/30 text-orange-500">
               <Clock className="h-3 w-3" /> {remaining} month{remaining !== 1 ? 's' : ''} left
             </Badge>
+          )}
+
+          {!isComplete && onMarkPaid && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={onMarkPaid}
+              disabled={isPaidForCurrentMonth}
+            >
+              {isPaidForCurrentMonth ? 'Paid for this month' : 'Pay for this month'}
+            </Button>
           )}
         </div>
       </CardContent>
