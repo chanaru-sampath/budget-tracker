@@ -15,8 +15,8 @@ export function CategoryCard({
   onDelete: () => void
 }) {
   return (
-    <Card className="group border-border shadow-sm transition-shadow hover:shadow-md">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4">
+    <Card className="py-2 group border-border shadow-sm transition-shadow hover:shadow-md">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 px-4 py-2">
         <div className="flex items-center gap-3">
           <div className="h-4 w-4 rounded-full" style={{ backgroundColor: category.color }} />
           <CardTitle className="text-base font-medium">{category.name}</CardTitle>
