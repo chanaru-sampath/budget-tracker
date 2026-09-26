@@ -1,8 +1,8 @@
-import { LayoutGrid, Table2 } from 'lucide-react'
+import { Landmark, LayoutGrid, Table2 } from 'lucide-react'
 
 import { Button } from './ui/button'
 
-export type ViewMode = 'card' | 'table'
+export type ViewMode = 'card' | 'table' | 'grouped-table'
 
 export function ViewToggle({ view, onChange }: { view: ViewMode; onChange: (view: ViewMode) => void }) {
   return (
@@ -28,6 +28,19 @@ export function ViewToggle({ view, onChange }: { view: ViewMode; onChange: (view
         title="Table view"
       >
         <Table2 className="h-3.5 w-3.5" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className={`h-7 w-7 transition-all ${
+          view === 'grouped-table'
+            ? 'bg-background text-foreground shadow-sm'
+            : 'text-muted-foreground hover:text-foreground'
+        }`}
+        onClick={() => onChange('grouped-table')}
+        title="Grouped by Bank"
+      >
+        <Landmark className="h-3.5 w-3.5" />
       </Button>
     </div>
   )

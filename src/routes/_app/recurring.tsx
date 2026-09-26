@@ -44,7 +44,7 @@ function RecurringPage() {
 
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<RecurringTemplate | null>(null)
-  const [view, setView] = useState<ViewMode>('card')
+  const [view, setView] = useState<ViewMode>('grouped-table')
 
   const activeTemplates = templates.filter((t) => t.isActive)
   const inactiveTemplates = templates.filter((t) => !t.isActive)
