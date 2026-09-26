@@ -17,6 +17,7 @@ create extension if not exists "uuid-ossp";
 create table public.profiles (
     id          uuid references auth.users(id) on delete cascade primary key,
     full_name   text,
+    avatar_url  text,
     currency    text not null default 'LKR',
     created_at  timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -258,6 +259,8 @@ create policy "Users can view own profile"
     on public.profiles for select using (auth.uid() = id);
 create policy "Users can update own profile"
     on public.profiles for update using (auth.uid() = id);
+create policy "Users can insert own profile"
+    on public.profiles for insert with check (auth.uid() = id);
 
 -- --- categories ---
 create policy "Users can view own categories"
@@ -348,6 +351,22 @@ create policy "Users can insert own settings"
     on public.user_settings for insert with check (auth.uid() = user_id);
 create policy "Users can update own settings"
     on public.user_settings for update using (auth.uid() = user_id);
+
+-- ============================================================
+-- STORAGE: avatars bucket
+-- ============================================================
+insert into storage.buckets (id, name, public) values ('avatars', 'avatars', true);
+
+create policy "Public Access"
+    on storage.objects for select using (bucket_id = 'avatars');
+create policy "Users can upload their own avatar"
+    on storage.objects for insert with check (
+      bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1]
+    );
+create policy "Users can update their own avatar"
+    on storage.objects for update using (
+      bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1]
+    );
 
 -- ============================================================
 -- TRIGGER: auto-create profile + seed defaults on signup
