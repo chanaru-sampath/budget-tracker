@@ -82,7 +82,7 @@ function RecurringPage() {
   return (
     <div className="flex-1 space-y-6 p-4 pt-6 md:p-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-foreground text-3xl font-bold tracking-tight">Recurring Expenses</h2>
           <p className="text-muted-foreground mt-1 text-sm">
