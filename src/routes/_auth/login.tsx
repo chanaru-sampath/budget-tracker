@@ -53,10 +53,14 @@ function Login() {
   }
 
   return (
-    <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
-      <h1 className="text-2xl font-semibold mb-6 text-center text-slate-900">Welcome Back</h1>
+    <div className="bg-card text-card-foreground p-8 rounded-xl shadow-sm border border-border">
+      <h1 className="text-2xl font-semibold mb-6 text-center">Welcome Back</h1>
 
-      {error && <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">{error}</div>}
+      {error && (
+        <div className="mb-4 p-3 bg-destructive/10 text-destructive text-sm rounded-lg border border-destructive/20">
+          {error}
+        </div>
+      )}
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -94,10 +98,10 @@ function Login() {
         </form>
       </Form>
 
-      <p className="mt-6 text-center text-sm text-slate-600">
+      <p className="mt-6 text-center text-sm text-muted-foreground">
         Don't have an account?{' '}
         {env.VITE_ALLOW_SIGNUP ? (
-          <Link to="/sign-up" className="text-slate-900 font-medium hover:underline">
+          <Link to="/sign-up" className="text-foreground font-medium hover:underline">
             Sign up
           </Link>
         ) : (
