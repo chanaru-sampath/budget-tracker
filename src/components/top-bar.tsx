@@ -1,6 +1,8 @@
 import { useRouterState } from '@tanstack/react-router'
 import { Menu } from 'lucide-react'
 
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { useProfile } from '@/hooks/use-profile'
 import { useAuthStore } from '@/stores/use-auth-store'
 import { useUIStore } from '@/stores/use-ui-store'
 
@@ -17,9 +19,16 @@ export function TopBar() {
   const toggleSidebar = useUIStore((state) => state.toggleSidebar)
   const router = useRouterState()
   const user = useAuthStore((state) => state.user)
+  const { data: profile } = useProfile()
 
   const currentPath = Object.keys(routeTitles).find((path) => router.location.pathname.startsWith(path))
   const title = currentPath ? routeTitles[currentPath] : 'Dashboard'
+
+  const fallback =
+    profile?.fullName?.charAt(0)?.toUpperCase() ||
+    user?.user_metadata?.full_name?.charAt(0)?.toUpperCase() ||
+    user?.email?.charAt(0)?.toUpperCase() ||
+    '?'
 
   return (
     <header className="bg-card border-b border-border h-16 flex items-center justify-between px-4 md:px-6 lg:px-8">
@@ -36,9 +45,10 @@ export function TopBar() {
       <div className="flex items-center gap-4">
         <MonthSelector />
         <div className="hidden sm:flex items-center gap-2 border-l border-border pl-4 ml-2">
-          <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center text-primary font-medium text-sm">
-            {user?.user_metadata?.full_name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || '?'}
-          </div>
+          <Avatar size="default">
+            {profile?.avatarUrl && <AvatarImage src={profile.avatarUrl} alt="Avatar" className="object-cover" />}
+            <AvatarFallback className="bg-primary/10 text-primary font-medium text-sm">{fallback}</AvatarFallback>
+          </Avatar>
         </div>
       </div>
     </header>

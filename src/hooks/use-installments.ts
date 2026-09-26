@@ -183,10 +183,9 @@ export function getRemainingAmount(plan: InstallmentPlan): number {
 export function isCurrentMonthPaid(plan: InstallmentPlan): boolean {
   const start = new Date(plan.startDate)
   const now = new Date()
-  
+
   const monthsDiff = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth())
   const expectedPayments = Math.max(0, monthsDiff + 1)
-  
+
   return plan.paidInstallments >= expectedPayments
 }
-

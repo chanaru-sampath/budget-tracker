@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
 
+import { useApplyTheme } from '@/hooks/use-settings'
 import AuthProvider from '@/providers/auth-provider'
 import { useAuthStore } from '@/stores/use-auth-store'
 
@@ -27,6 +28,7 @@ declare module '@tanstack/react-router' {
 
 function AppContent() {
   const user = useAuthStore((state) => state.user)
+  useApplyTheme()
   return <RouterProvider router={router} context={{ auth: { user } }} />
 }
 
